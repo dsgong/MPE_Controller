@@ -1,7 +1,6 @@
 #include <MIDI.h>
 #include <stdlib.h> 
-#include <CapacitiveSensor.h>
-//CapacitiveSensor Sensor = CapacitiveSensor(4, 6);
+#include "Adafruit_MPR121.h"
 
 // Create and bind the MIDI interface to the default hardware Serial port
 MIDI_CREATE_DEFAULT_INSTANCE(); 
@@ -16,6 +15,8 @@ struct{
 
 channel allChannels[15];
 
+Adafruit_MPR121 cap = Adafruit_MPR121();
+
 void setup()
 {
     MIDI.setHandleNoteOn(handleNoteOn);
@@ -24,7 +25,7 @@ void setup()
     MIDI.setHandleControlChange(handleCC);
     MIDI.begin(MIDI_CHANNEL_OMNI);
     MIDI.turnThruOff();
-    Serial.begin(256000);
+    Serial.begin(115200);
 
     Serial.write(0xBF);
     Serial.write(0x79);
@@ -41,6 +42,10 @@ void setup()
     for(int i = 0; i < 15; i++){
         allChannels[i].numNotes = 0;
         allChannels[i].pressure = 0;
+    }
+
+    if (!cap.begin(0x5A)) {
+        while (1);
     }
 }
 
@@ -83,21 +88,22 @@ void handleCC(byte channel, byte MSB, byte LSB){
 
 int findPressure(byte pitch){
     //returns pressure for a given pitch.
-    int val = Sensor.capacitiveSensor(1);
-    /*char str[43];
-    sprintf(str, "%d", val);
-    Serial.write(str);
-    Serial.write(0x20); 
-    //This prints capacitive touch values to serial monitor*/
-    return val;
+    int val = cap.filteredData(pitch);
+    val = 153 - (0.5079 * val);
+    return val + ((127 - val) & ((127 - val) >>(sizeof(int) * 8 - 1)));
+    //returns minimum of scaled values and 127. 
 }
 
 void loop() {
-    MIDI.read();
-    /*for(int i = 0; i < 16; i++){
+    for(int i = 0; i < 12; i++){
+        MIDI.read();
         if(allChannels[i].numNotes != 0){
-            MIDI.sendAfterTouch(findPressure(allChannels[i].pitchList[allChannels[i].numNotes - 1]), i);
+            MIDI.sendAfterTouch(findPressure(i), i + 1);
         }
-    }*/
-    //Pressure read
+    }
+    /*for(uint8_t i = 0; i < 12; i++){
+        Serial.print(findPressure(i)); Serial.print("\t");
+    }
+    Serial.println();*/
+    //Pressure write to serial monitor
 }
